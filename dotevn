@@ -1,0 +1,21 @@
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL_MISTRAL=mistral:latest
+OLLAMA_MODEL_QWEN=qwen2.5:14b
+LM_STUDIO_HOST=http://localhost:3011
+PG_URI=postgresql://llm:llm@192.168.1.3:5432/llm?sslmode=require 
+MONGO_URI=mongodb://root:root@localhost
+LLAMA_CLOUD_API_KEY=
+OPENAI_API_KEY=
+PGML_DATABASE_URL=
+NO_PROXY=localhost
+HF_EBED_QWEN=Alibaba-NLP/gte-Qwen2-1.5B-instruct
+HF_EBED_CACHE_FOLDER="/Users/tju/.cache/huggingface/embeddings"
+HUGGINGFACE_CO_URL_HOME=https://hf-mirror.com
+HUGGINGFACE_API_KEY=
+NEO4J_USER=kg
+NEO4J_PASS=kg@sh123
+NEO4J_URI=bolt://localhost:7687
+NEO4J_DB=movies
+# file path you want to extract images from
+QDRANT_API_KEY=
+GOOGLE_AI_STUDIO=
