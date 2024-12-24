@@ -1,17 +1,13 @@
 import os
 from model import Document
-from common.reader import pdf_marker_reader
+from common.reader import pdf_reader, pdf_reader_pyu
 from common.parser import sentence_splitter
 from common.llm import LlmConfig, LocalLLM
-from common.storage import get_pg_storage_context
+from common.storage import get_pg_storage_context, get_local_file_storage_context
 from llama_index.core import VectorStoreIndex
 
 import streamlit as st
-
-
-config = LlmConfig(LocalLLM.LM_STUDIO)
-storage_context = get_pg_storage_context("qwen", 4096)
-
+llm_config =  LlmConfig(LocalLLM.LM_STUDIO)
 
 def read_documents_to_list(file_path):
     import json
@@ -21,6 +17,59 @@ def read_documents_to_list(file_path):
             return [Document(**doc) for doc in data]
     except:
         return []
+
+documents = read_documents_to_list("document.json")
+    
+def ui_sidebar():
+    if st.sidebar.button("upload new documents"):
+        ui_sidebar_upload_files()
+
+    if len(documents) == 0:
+        st.sidebar.write("no avaiable documents now.")
+    else:
+        options=[doc.file_name for doc in documents if doc.file_name]
+        st.sidebar.write("Available documents:")
+        for option in options:
+            item  = st.sidebar.checkbox(f'{option}')
+            if item:
+                doc  = get_document_index_id(option, documents)
+                if doc is None:
+                    st.toast(f"{item} not found")
+                else:
+                    ui_main(doc=doc)
+
+def ui_main(doc : Document):
+    st.write(f"正在对{doc.file_name}进行对话")
+    query = st.text_input(f'请输入要提问的内容')
+    if query:
+        chat(doc.file_name, query)
+
+@st.dialog("上传新文件")
+def ui_sidebar_upload_files():
+    
+    uploaded_files = st.file_uploader("选择文件", accept_multiple_files=True)
+    finish_upload = st.button('FINISH UPLOAD')
+    if finish_upload and uploaded_files:
+        saved_file_names = []
+        for uploaded_file in uploaded_files:
+            file_path = os.path.join("files", uploaded_file.name)
+            # print(file_path)
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            saved_file_names.append(uploaded_file.name)
+            hit = "正在处理文件"
+            with st.spinner(hit):
+                for doc in saved_file_names:
+                    hit = f'正在处理: {doc}'
+                    index_id = index_file(doc)
+                    print(index_id)
+                    document = Document(file_name=doc, index_id=index_id)
+                    documents.append(document)
+                    print(document)
+                    save_documents_to_json(documents=documents)
+                st.write("文件处理完毕")
+                st.rerun()
+
 
 def save_documents_to_json(documents, file_path="document.json"):
     import json
@@ -32,72 +81,41 @@ def save_documents_to_json(documents, file_path="document.json"):
 
 
 def index_file(file_name) -> str: 
-    docs = pdf_marker_reader(file_name=file_name)
+    storage_context = get_local_file_storage_context(file_name)
+    llm_config = LlmConfig(LocalLLM.LM_STUDIO)
+    file = f'./files/{file_name}'
+    print(file)
+    docs = pdf_reader_pyu(file)
+    print(f'docs: {len(docs)}')
     nodes = sentence_splitter(docs)
-   
-    vector_index = VectorStoreIndex(nodes=nodes, storage_context=storage_context)
+    print(f'node: {len(nodes)}')
+    vector_index = VectorStoreIndex(nodes=nodes, storage_context=storage_context, 
+                                    embed_model=llm_config.embedding)
     storage_context.persist()
+    print(vector_index.index_id)
     return vector_index.index_id
+
 
 def get_document_index_id(file_name, documents):
     """Get index_id for a document by file_name from documents list"""
     for doc in documents:
         if doc.file_name == file_name:
-            return doc.index_id
+            return doc
     return None
 
 def chat(index_id, query):
-    pg_vector_index = VectorStoreIndex.from_vector_store(storage_context.vector_store, index_id=index_id)
-    query_engine = pg_vector_index.as_query_engine(llm=config.llm)
-    resp = query_engine.query(query)
-    st.write(resp)
-
-# Read document.txt file
-documents = read_documents_to_list("document.json")
-task_type = st.sidebar.selectbox("选择一项任务", [ "提问", "上传", ])
-
-if task_type == "对话":
-    if len(documents) == 0:
-        st.write("no files found.")
-    else:
-        st.header("请选择左侧已完成的文件")
-        # Display txt content as radio options in sidebar
-        if documents:
-            selected_file = st.sidebar.radio(
-                "选择文件",
-                 options=[doc.file_name for doc in documents if doc.file_name],
-                key="selected_file"
-            )
-            index_id = get_document_index_id(selected_file)
-            if index_id is None:
-                st.write(f"未找到文件{selected_file}的索引数据")
-            else:
-                st.write(f"正在对{selected_file}进行对话")
-                query = st.text_input(f'请输入要提问的内容')
-                if query:
-                    chat(index_id, query)
+    with st.spinner("thinking..."):
+        storage_context = get_local_file_storage_context(index_id)
+        vector_index = VectorStoreIndex.from_vector_store(storage_context.vector_store, index_id=index_id)
+        query_engine = vector_index.as_chat_engine(llm=llm_config.llm)
+        resp = query_engine.chat(query)
+        st.write(resp.response)
 
 
-if task_type == '上传':
-    st.title("上传新文档")
-    uploaded_files = st.file_uploader("选择文件", accept_multiple_files=True)
-    finish_upload = st.button('FINISH UPLOAD')
-    if finish_upload and uploaded_files:
-        saved_file_names = []
-        for uploaded_file in uploaded_files:
-            file_path = os.path.join("files", uploaded_file.name)
-            # print(file_path)
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            saved_file_names.append(uploaded_file.name)
-            st.toast(f"You have uploaded {uploaded_file.name}")
+                
+def main():
+    st.title("Personal Knowledge Management.")
+    ui_sidebar()
 
-            hit = "正在处理文件"
-            with st.spinner(hit):
-                for doc in saved_file_names:
-                    hit = f'正在处理: {doc}'
-                    index_id = index_file(doc)
-                    document = Document(file_name=doc, index_id=index_id)
-                    documents.append(document)
-                    save_documents_to_json(documents=documents)
-                st.write("文件处理完毕")
+if __name__ == "__main__":
+    main()

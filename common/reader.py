@@ -34,6 +34,10 @@ from llama_index.readers.file import (DocxReader,
 
 FileInput = Union[str, bytes, BufferedIOBase]
 
+def pdf_reader_pyu(file_name):
+    reader = PyMuPDFReader()
+    return reader.load_data(file_name)
+
 
 def image_reader(file_name):
     reader = ImageReader(parse_text=True)
@@ -43,14 +47,17 @@ def pdf_marker_reader(file_name):
     reader = PDFMarkerReader()
     return reader.load_data(Path(file_name))
 
+def pdf_reader(file_name):
+    reader = PDFReader(return_full_document=True)
+    return reader.load_data(file_name)
+
 def smart_pdf_reader(file_name):
     '''
         online pdf file reader
     '''
     llmsherpa_api_url = "https://readers.llmsherpa.com/api/document/developer/parseDocument?renderFormat=all"
-    pdf_url = "https://arxiv.org/pdf/1910.13461.pdf"  # also allowed is a file path e.g. /home/downloads/xyz.pdf
     pdf_loader = SmartPDFLoader(llmsherpa_api_url=llmsherpa_api_url)
-    return pdf_loader.load_data(pdf_url)
+    return pdf_loader.load_data(file_name)
 
 def read_files_from_directory(dir):
     reader = SimpleDirectoryReader(dir)

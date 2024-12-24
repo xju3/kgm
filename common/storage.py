@@ -5,6 +5,8 @@ from llama_index.storage.index_store.mongodb import MongoIndexStore
 from llama_index.storage.index_store.postgres import PostgresIndexStore
 from llama_index.vector_stores.postgres.base import PGVectorStore
 from llama_index.graph_stores.neo4j import Neo4jGraphStore
+from llama_index.vector_stores.chroma import ChromaVectorStore
+import chromadb
 from llama_index.core import StorageContext
 from sqlalchemy import make_url
 import os
@@ -16,6 +18,15 @@ username=os.getenv("NEO4J_USER")
 password=os.getenv("NEO4J_PASS") 
 url=os.getenv("NEO4J_URI")
 database=os.getenv("NEO4J_DB")
+
+def get_local_file_storage_context(index_name):
+    client = chromadb.PersistentClient(path="./chroma_db")
+    chroma_collection = client.get_or_create_collection(index_name)
+    # Create a vector store
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    # Create a storage context
+    return StorageContext.from_defaults(vector_store=vector_store)
+    
 
 def get_neo4j_storage_context(config, database=database):
     '''
